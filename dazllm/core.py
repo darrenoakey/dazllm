@@ -8,8 +8,6 @@ from typing import Optional, Union, Dict, List, Type, Literal, TypedDict, Set
 from pydantic import BaseModel
 from enum import Enum
 
-__version__ = "0.1.0"
-
 
 class Message(TypedDict):
     role: Literal["user", "assistant", "system"]
