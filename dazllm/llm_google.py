@@ -48,14 +48,6 @@ class LlmGoogle(Llm):
                     "  pip install google-generativeai  (older API)"
                 )
 
-    @staticmethod
-    def check_config():
-        """Check if Google is properly configured"""
-        api_key = keyring.get_password("dazllm", "google_api_key")
-        if not api_key:
-            raise ConfigurationError(
-                "Google API key not found in keyring. Set with: keyring set dazllm google_api_key"
-            )
 
     @staticmethod
     def default_model() -> str:
