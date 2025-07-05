@@ -326,6 +326,10 @@ class Llm:
         """Check if provider is properly configured"""
         raise NotImplementedError("check_config should be implemented by subclasses")
 
+    def context_length(self) -> int:
+        """Return maximum context length for this model"""
+        raise NotImplementedError("context_length should be implemented by subclasses")
+
     # Static methods for module-level interface
     @classmethod
     def chat(
@@ -368,6 +372,17 @@ class Llm:
         model_name = cls._resolve_model(model, model_type)
         llm = cls.model_named(model_name)
         return llm.image(prompt, file_name, width, height)
+
+    @classmethod
+    def context_length(
+        cls,
+        model: Optional[str] = None,
+        model_type: Optional[ModelType] = None,
+    ) -> int:
+        """Get the maximum context length for a model"""
+        model_name = cls._resolve_model(model, model_type)
+        llm = cls.model_named(model_name)
+        return llm.context_length()
 
 
 def check_configuration() -> Dict[str, Dict[str, Union[bool, str]]]:

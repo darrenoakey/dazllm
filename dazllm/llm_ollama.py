@@ -85,6 +85,25 @@ class LlmOllama(Llm):
         url = keyring.get_password("dazllm", "ollama_url")
         return url or "http://127.0.0.1:11434"
 
+    def context_length(self) -> int:
+        """Return context window from Ollama API"""
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/show",
+                json={"name": self.model},
+                headers=self.headers,
+                timeout=30,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if "details" in data and "context_length" in data["details"]:
+                return data["details"]["context_length"]
+            if "context_length" in data:
+                return data["context_length"]
+            raise DazLlmError("Context length not found in Ollama response")
+        except Exception as e:
+            raise DazLlmError(f"Ollama context length error: {e}")
+
     def _ensure_model_available(self):
         """Ensure model is available, pull if necessary"""
         if not self._is_model_available():

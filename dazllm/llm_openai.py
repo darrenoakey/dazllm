@@ -83,6 +83,19 @@ class LlmOpenai(Llm):
             raise ConfigurationError("OpenAI API key not found in keyring")
         return api_key
 
+    def context_length(self) -> int:
+        """Return context window from OpenAI API"""
+        try:
+            info = self.client.models.retrieve(self.model)
+            for attr in ("context_window", "context_window_tokens", "context_length"):
+                if hasattr(info, attr):
+                    return getattr(info, attr)
+                if isinstance(info, dict) and attr in info:
+                    return info[attr]
+            raise DazLlmError("Context length not found in OpenAI response")
+        except Exception as e:
+            raise DazLlmError(f"OpenAI context length error: {e}")
+
     def _normalize_conversation(self, conversation: Conversation) -> list:
         """Convert conversation to OpenAI message format"""
         if isinstance(conversation, str):

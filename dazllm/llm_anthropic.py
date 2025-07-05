@@ -76,6 +76,18 @@ class LlmAnthropic(Llm):
             raise ConfigurationError("Anthropic API key not found in keyring")
         return api_key
 
+    def context_length(self) -> int:
+        """Return context window from Anthropic API"""
+        try:
+            model = self.client.models.retrieve(self.model)
+            if hasattr(model, "context_window"):
+                return model.context_window
+            if isinstance(model, dict) and "context_window" in model:
+                return model["context_window"]
+            raise DazLlmError("Context length not found in Anthropic response")
+        except Exception as e:
+            raise DazLlmError(f"Anthropic context length error: {e}")
+
     def _normalize_conversation(self, conversation: Conversation) -> tuple[str, list]:
         """Convert conversation to Anthropic message format"""
         if isinstance(conversation, str):
