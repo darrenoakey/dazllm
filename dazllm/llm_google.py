@@ -98,6 +98,27 @@ class LlmGoogle(Llm):
             raise ConfigurationError("Google API key not found in keyring")
         return api_key
 
+    def context_length(self) -> int:
+        """Return context window from Google API"""
+        try:
+            if self._use_new_api:
+                model_info = self.client.get_model(name=f"models/{self.model}")
+            else:
+                model_info = self.client._client.get_model(self.model)
+
+            for attr in (
+                "input_token_limit",
+                "context_window_tokens",
+                "token_limit",
+            ):
+                if hasattr(model_info, attr):
+                    return getattr(model_info, attr)
+                if isinstance(model_info, dict) and attr in model_info:
+                    return model_info[attr]
+            raise DazLlmError("Context length not found in Google response")
+        except Exception as e:
+            raise DazLlmError(f"Google context length error: {e}")
+
     def _normalize_conversation(self, conversation: Conversation) -> str:
         """Convert conversation to Google format"""
         if isinstance(conversation, str):
