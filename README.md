@@ -4,11 +4,11 @@
 
 **Simple, unified interface for all major LLMs**
 
-Stop juggling different APIs and libraries. `dazllm` gives you a clean, consistent way to chat with any LLM - from GPT-4 and Claude to local Ollama models.
+Stop juggling different APIs and libraries. `dazllm` gives you a clean, consistent way to chat with any LLM - from GPT-4 and Claude to local Ollama or LM Studio models.
 
 ## Features
 
-✨ **Unified API** - Same interface for OpenAI, Anthropic, Google, and local models  
+✨ **Unified API** - Same interface for OpenAI, Anthropic, Google, and local models (Ollama, LM Studio)
 🔧 **Smart Model Selection** - Choose by name, type, or let it auto-select  
 🔐 **Secure Configuration** - API keys stored safely in system keyring  
 📝 **Structured Output** - Get Pydantic models directly from LLM responses  
@@ -32,6 +32,7 @@ keyring set dazllm openai_api_key YOUR_OPENAI_KEY
 keyring set dazllm anthropic_api_key YOUR_ANTHROPIC_KEY
 keyring set dazllm google_api_key YOUR_GOOGLE_KEY
 keyring set dazllm ollama_url http://localhost:11434
+keyring set dazllm lmstudio_url http://localhost:1234
 ```
 
 Check everything is working:
@@ -118,6 +119,7 @@ All models use the format `provider:model`:
 - **Anthropic**: `anthropic:claude-3-5-sonnet-20241022`, `anthropic:claude-3-haiku-20240307`
 - **Google**: `google:gemini-pro`, `google:gemini-flash`
 - **Ollama**: `ollama:mistral-small`, `ollama:llama3:8b`, `ollama:codellama:7b`
+- **LM Studio**: `lm-studio:mistral`, `lm-studio:llama3`
 
 You can also use just the provider name (e.g., `openai`) to use that provider's default model.
 
@@ -131,6 +133,7 @@ keyring set dazllm openai_api_key YOUR_OPENAI_KEY
 keyring set dazllm anthropic_api_key YOUR_ANTHROPIC_KEY
 keyring set dazllm google_api_key YOUR_GOOGLE_KEY
 keyring set dazllm ollama_url http://localhost:11434
+keyring set dazllm lmstudio_url http://localhost:1234
 
 # Set default model (optional)
 keyring set dazllm default_model openai:gpt-4o
@@ -210,7 +213,7 @@ print(f"Image saved to {image_path}")
 
 - Python 3.8+
 - API keys for desired providers (OpenAI, Anthropic, Google)
-- Ollama installed for local models
+- Ollama or LM Studio installed for local models
 
 ## License
 

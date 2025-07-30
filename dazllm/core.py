@@ -53,6 +53,11 @@ PROVIDERS = {
     },
     "google": {"class": "LlmGoogle", "module": ".llm_google", "aliases": ["gemini"]},
     "ollama": {"class": "LlmOllama", "module": ".llm_ollama", "aliases": []},
+    "lm-studio": {
+        "class": "LlmLmstudio",
+        "module": ".llm_lmstudio",
+        "aliases": ["lmstudio"],
+    },
     # Add new providers here - just one line each!
     # "huggingface": {"class": "LlmHuggingface", "module": ".llm_huggingface", "aliases": ["hf"]},
 }
