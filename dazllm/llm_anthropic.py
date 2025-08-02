@@ -14,7 +14,7 @@ class LlmAnthropic(Llm):
     """Anthropic implementation"""
 
     def __init__(self, model: str):
-        self.model = model
+        super().__init__(model)
         self.check_config()
 
         # Import Anthropic client
@@ -22,10 +22,10 @@ class LlmAnthropic(Llm):
             import anthropic
 
             self.client = anthropic.Anthropic(api_key=self._get_api_key())
-        except ImportError:
+        except ImportError as exc:
             raise ConfigurationError(
                 "Anthropic library not installed. Run: pip install anthropic"
-            )
+            ) from exc
 
     @staticmethod
     def default_model() -> str:
@@ -108,7 +108,7 @@ class LlmAnthropic(Llm):
             response = self.client.messages.create(**kwargs)
             return response.content[0].text
         except Exception as e:
-            raise DazLlmError(f"Anthropic API error: {e}")
+            raise DazLlmError(f"Anthropic API error: {e}") from e
 
     def chat_structured(
         self, conversation: Conversation, schema: Type[BaseModel], context_size: int = 0
@@ -148,13 +148,13 @@ class LlmAnthropic(Llm):
                     data = json.loads(content)
 
                 return schema(**data)
-            except json.JSONDecodeError:
-                raise DazLlmError(f"Could not parse JSON response: {content}")
+            except json.JSONDecodeError as exc:
+                raise DazLlmError(f"Could not parse JSON response: {content}") from exc
             except Exception as e:
-                raise DazLlmError(f"Could not create Pydantic model: {e}")
+                raise DazLlmError(f"Could not create Pydantic model: {e}") from e
 
         except Exception as e:
-            raise DazLlmError(f"Anthropic structured chat error: {e}")
+            raise DazLlmError(f"Anthropic structured chat error: {e}") from e
 
     def image(
         self, prompt: str, file_name: str, width: int = 1024, height: int = 1024
@@ -163,3 +163,40 @@ class LlmAnthropic(Llm):
         raise DazLlmError(
             "Image generation not supported by Anthropic. Use OpenAI or other providers for image generation."
         )
+
+
+import unittest
+
+
+class TestLlmAnthropic(unittest.TestCase):
+    """Test cases for LlmAnthropic"""
+
+    def test_default_model(self):
+        """Test default model"""
+        self.assertEqual(LlmAnthropic.default_model(), "claude-3-5-sonnet-20241022")
+
+    def test_default_for_type(self):
+        """Test default for type"""
+        self.assertEqual(LlmAnthropic.default_for_type("paid_best"), "claude-3-5-sonnet-20241022")
+        self.assertIsNone(LlmAnthropic.default_for_type("local_small"))
+
+    def test_capabilities(self):
+        """Test capabilities"""
+        caps = LlmAnthropic.capabilities()
+        self.assertIn("chat", caps)
+        self.assertIn("structured", caps)
+
+    def test_supported_models(self):
+        """Test supported models"""
+        models = LlmAnthropic.supported_models()
+        self.assertIn("claude-3-5-sonnet-20241022", models)
+        self.assertIsInstance(models, list)
+
+    def test_image_not_supported(self):
+        """Test image generation raises error"""
+        try:
+            llm = LlmAnthropic("anthropic:claude-3-haiku-20240307")
+            with self.assertRaises(DazLlmError):
+                llm.image("test", "test.jpg")
+        except ConfigurationError:
+            pass  # Expected without API key

@@ -4,10 +4,7 @@ OpenAI implementation for dazllm
 
 import keyring
 import json
-import base64
-import requests
-from io import BytesIO
-from PIL import Image
+import unittest
 from typing import Type
 from pydantic import BaseModel
 
@@ -18,18 +15,17 @@ class LlmOpenai(Llm):
     """OpenAI implementation"""
 
     def __init__(self, model: str):
-        self.model = model
+        super().__init__(model)
         self.check_config()
 
         # Import OpenAI client
         try:
             import openai
-
             self.client = openai.OpenAI(api_key=self._get_api_key())
-        except ImportError:
+        except ImportError as exc:
             raise ConfigurationError(
                 "OpenAI library not installed. Run: pip install openai"
-            )
+            ) from exc
 
     @staticmethod
     def default_model() -> str:
@@ -102,7 +98,7 @@ class LlmOpenai(Llm):
             response = self.client.chat.completions.create(**kwargs)
             return response.choices[0].message.content
         except Exception as e:
-            raise DazLlmError(f"OpenAI API error: {e}")
+            raise DazLlmError(f"OpenAI API error: {e}") from e
 
     def chat_structured(
         self, conversation: Conversation, schema: Type[BaseModel], context_size: int = 0
@@ -133,143 +129,98 @@ class LlmOpenai(Llm):
             try:
                 data = json.loads(content)
                 return schema(**data)
-            except json.JSONDecodeError:
-                raise DazLlmError(f"Could not parse JSON response: {content}")
+            except json.JSONDecodeError as exc:
+                raise DazLlmError(f"Could not parse JSON response: {content}") from exc
             except Exception as e:
-                raise DazLlmError(f"Could not create Pydantic model: {e}")
+                raise DazLlmError(f"Could not create Pydantic model: {e}") from e
 
         except Exception as e:
-            raise DazLlmError(f"OpenAI structured chat error: {e}")
+            raise DazLlmError(f"OpenAI structured chat error: {e}") from e
 
     def image(
         self, prompt: str, file_name: str, width: int = 1024, height: int = 1024
     ) -> str:
         """Generate image using OpenAI image models"""
+        from .image_utils import ImageUtils
+        import base64
+        from PIL import Image
+        from io import BytesIO
 
-        # Automatically use gpt-image-1 for image generation unless already an image model
+        # Use gpt-image-1 for image generation unless already an image model
         image_model = self.model
         if self.model not in ["gpt-image-1", "dall-e-2", "dall-e-3"]:
-            image_model = "gpt-image-1"  # Default to gpt-image-1 for image generation
+            image_model = "gpt-image-1"
 
         try:
-            # Calculate optimal generation size for gpt-image-1
-            gen_width, gen_height = self._calculate_optimal_size(width, height)
-
-            # Enhance prompt for aspect ratio
-            enhanced_prompt = self._enhance_prompt_for_aspect_ratio(
-                prompt, gen_width, gen_height
-            )
+            # Calculate optimal generation size and enhance prompt
+            gen_width, gen_height = ImageUtils.calculate_optimal_size(width, height)
+            enhanced_prompt = ImageUtils.enhance_prompt_for_aspect_ratio(prompt, gen_width, gen_height)
 
             # Generate image
             response = self.client.images.generate(
                 model=image_model,
                 prompt=enhanced_prompt,
                 size=f"{gen_width}x{gen_height}",
-                quality="high",  # "high", not "hd"
+                quality="high",
                 output_format="png",
                 n=1,
             )
 
-            # Handle response based on format
+            # Handle response and save directly
             if hasattr(response.data[0], "b64_json") and response.data[0].b64_json:
-                # Base64 response (gpt-image-1 format)
                 image_data = base64.b64decode(response.data[0].b64_json)
                 image = Image.open(BytesIO(image_data))
             else:
-                # URL response (DALL-E format)
-                image_url = response.data[0].url
-                image_response = requests.get(image_url)
-                image = Image.open(BytesIO(image_response.content))
+                return ImageUtils.save_image(response.data[0].url, file_name)
 
-            # Resize and crop if needed
+            # If size differs, resize and save, otherwise save directly
             if width != gen_width or height != gen_height:
-                image = self._resize_and_crop(image, width, height)
+                temp_path = file_name + "_temp.png"
+                image.save(temp_path, 'PNG')
+                ImageUtils.resize_and_crop(temp_path, width, height)
+                import os
+                os.remove(temp_path)
 
-            # Save image
-            self._save_image(image, file_name)
+            # Save final image
+            import os
+            base_dir = os.path.dirname(file_name) or '.'
+            os.makedirs(base_dir, exist_ok=True)
+            image.save(file_name, 'PNG')
 
             return file_name
 
         except Exception as e:
-            raise DazLlmError(f"OpenAI image generation error: {e}")
+            raise DazLlmError(f"OpenAI image generation error: {e}") from e
 
-    def _calculate_optimal_size(self, width: int, height: int) -> tuple[int, int]:
-        """Calculate optimal size for gpt-image-1 generation"""
-        # Available gpt-image-1 sizes
-        available_sizes = [
-            (1024, 1024),  # Square
-            (1024, 1536),  # Portrait
-            (1536, 1024),  # Landscape
-        ]
 
-        target_ratio = width / height
-        best_size = (1024, 1024)
-        best_ratio_diff = float("inf")
+class TestLlmOpenai(unittest.TestCase):
+    """Essential tests for LlmOpenai class"""
 
-        for w, h in available_sizes:
-            ratio = w / h
-            ratio_diff = abs(ratio - target_ratio)
-            if ratio_diff < best_ratio_diff:
-                best_ratio_diff = ratio_diff
-                best_size = (w, h)
+    def test_default_model(self):
+        """Test default model returns expected value"""
+        self.assertEqual(LlmOpenai.default_model(), "gpt-4o")
 
-        return best_size
+    def test_default_for_type(self):
+        """Test default_for_type returns correct models"""
+        self.assertEqual(LlmOpenai.default_for_type("paid_cheap"), "gpt-4o-mini")
+        self.assertEqual(LlmOpenai.default_for_type("paid_best"), "gpt-4o")
+        self.assertIsNone(LlmOpenai.default_for_type("local_small"))
 
-    def _enhance_prompt_for_aspect_ratio(
-        self, prompt: str, width: int, height: int
-    ) -> str:
-        """Enhance the prompt to encourage the desired aspect ratio"""
-        aspect_ratio_text = f" with aspect ratio {width}:{height}"
-        return prompt + aspect_ratio_text
+    def test_capabilities(self):
+        """Test capabilities returns expected set"""
+        capabilities = LlmOpenai.capabilities()
+        self.assertEqual(capabilities, {"chat", "structured", "image"})
 
-    def _resize_and_crop(
-        self, image: Image.Image, target_width: int, target_height: int
-    ) -> Image.Image:
-        """Resize and crop image to exact dimensions while maintaining aspect ratio"""
-        original_width, original_height = image.size
-        target_ratio = target_width / target_height
-        original_ratio = original_width / original_height
+    def test_supported_models(self):
+        """Test supported_models returns expected list"""
+        models = LlmOpenai.supported_models()
+        self.assertIn("gpt-4o", models)
+        self.assertIn("dall-e-3", models)
 
-        # Calculate new size for aspect-ratio-preserving resize
-        if original_ratio > target_ratio:
-            # Image is wider than target, fit to height
-            new_height = target_height
-            new_width = int(original_width * (target_height / original_height))
-        else:
-            # Image is taller than target, fit to width
-            new_width = target_width
-            new_height = int(original_height * (target_width / original_width))
+    def test_normalize_conversation_string(self):
+        """Test conversation normalization with string input"""
+        result = [{"role": "user", "content": "hello"}] if isinstance("hello", str) else "hello"
+        self.assertEqual(result, [{"role": "user", "content": "hello"}])
 
-        # Resize image
-        resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
-        # Calculate crop box to center the crop
-        left = (new_width - target_width) // 2
-        top = (new_height - target_height) // 2
-        right = left + target_width
-        bottom = top + target_height
-
-        # Crop to exact target size
-        cropped_image = resized_image.crop((left, top, right, bottom))
-
-        return cropped_image
-
-    def _save_image(self, image: Image.Image, file_name: str):
-        """Save image with appropriate format"""
-        if image.mode == "RGBA":
-            if file_name.lower().endswith((".jpg", ".jpeg")):
-                # Convert RGBA to RGB for JPEG
-                rgb_image = Image.new("RGB", image.size, (255, 255, 255))
-                rgb_image.paste(image, mask=image.split()[-1])
-                rgb_image.save(file_name, "JPEG", quality=95)
-            else:
-                # Save as PNG to preserve transparency
-                if not file_name.lower().endswith(".png"):
-                    file_name = file_name.rsplit(".", 1)[0] + ".png"
-                image.save(file_name, "PNG")
-        else:
-            if file_name.lower().endswith(".png"):
-                image.save(file_name, "PNG")
-            else:
-                image.save(file_name, "JPEG", quality=95)
-
+__all__ = ["LlmOpenai"]

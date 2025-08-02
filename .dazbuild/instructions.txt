@@ -1,0 +1,71 @@
+# Dazbuild Instructions
+
+## CRITICAL TESTING REQUIREMENT - NO EXCEPTIONS
+**VITAL: ALL TESTS MUST BE REAL - NO MOCKING, STUBBING, OR PRETENDING ALLOWED**
+
+This is a non-negotiable requirement. Tests must:
+- Test actual functionality with real implementations
+- Never use mock objects, stubs, fakes, or any form of pretending
+- Never simulate behavior - only test real behavior
+- Exercise genuine code paths with authentic data
+- Interact with actual objects and methods, not substitutes
+
+Any form of mocking, stubbing, patching, or pretending will cause validation to fail.
+
+## End Change Validation Rules
+When you call `dazbuild_end_change`, the following checks must pass:
+
+1. **REAL TESTS ONLY**: No file may contain the words "mock", "stub", "fake", "patch", "pretend", or any simulation - all tests must test genuine functionality
+2. **File Size Limit**: All code files must be smaller than 8192 bytes
+3. **Unit Tests**: Every .py file must contain at least one unittest.TestCase test
+4. **No Keyring in Tests**: Tests should never access keyring - the word 'keyring' cannot appear after TestCase
+5. **No unittest.main()**: Files cannot invoke unittest.main() directly
+6. **Pylint Score**: Must be 10/10 with no errors or warnings
+
+## Best Practices for Using Dazbuild
+
+### Work with Small References
+- Always edit at the **smallest hierarchy node** possible
+- Instead of rewriting entire files, target specific functions, methods, or classes
+- Use `dazbuild_outline` to see the structure and find the right reference
+- Example: Edit `myfile.py::MyClass::my_method` instead of `myfile.py`
+
+### Workflow Pattern
+1. `dazbuild_start_change` - Begin your change session
+2. Use `dazbuild_get` to examine current code
+3. Use `dazbuild_write`, `dazbuild_add`, or `dazbuild_delete` for targeted changes
+4. `dazbuild_end_change` - Validate and commit
+
+### File Size Management
+- Keep code files under 8192 bytes
+- If a file grows too large, refactor into multiple smaller files
+- Split large classes into smaller, focused classes
+- Extract utility functions into separate modules
+
+### Code Documentation Requirements
+- **File Headers**: Every file MUST have a comprehensive comment at the top explaining:
+  - What the file is for
+  - Its main purpose and functionality
+  - How it relates to other files in the project
+  - Any important dependencies or interactions
+- **Function Documentation**: Every function (private or public) MUST have a docstring that explains:
+  - What the function does
+  - Parameters and their types
+  - Return value and type
+  - Any exceptions that might be raised
+  - Example usage when appropriate
+
+### Testing Strategy - REAL TESTS ONLY
+- Add real unit tests to every Python file (absolutely no mocks, stubs, or fakes)
+- Tests must never access the system keyring
+- Test both happy path and edge cases
+- Keep test methods focused and well-named
+- Place tests in the same file or dedicated test files
+- Use actual objects, real data, and genuine functionality
+- If external dependencies are needed, use real implementations or in-memory alternatives
+
+### Code Quality
+- Write clean, readable code that passes pylint
+- Use meaningful variable and function names
+- Add docstrings for public methods and classes
+- Keep functions focused on a single responsibility

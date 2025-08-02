@@ -5,8 +5,7 @@ Ollama implementation for dazllm
 import keyring
 import json
 import requests
-import subprocess
-from typing import Type, Optional
+from typing import Type
 from pydantic import BaseModel
 from jsonschema import validate, ValidationError
 
@@ -17,11 +16,9 @@ class LlmOllama(Llm):
     """Ollama implementation"""
 
     def __init__(self, model: str):
-        self.model = model
+        super().__init__(model)
         self.base_url = self._get_base_url()
         self.headers = {"Content-Type": "application/json"}
-
-        # Ensure model is available
         self._ensure_model_available()
 
     @staticmethod
@@ -36,7 +33,7 @@ class LlmOllama(Llm):
             "local_small": "phi3",
             "local_medium": "mistral-small",
             "local_large": "qwen3:32b",
-            "paid_cheap": None,  # Ollama is local, no paid models
+            "paid_cheap": None,
             "paid_best": None,
         }
         return defaults.get(model_type)
@@ -48,22 +45,12 @@ class LlmOllama(Llm):
 
     @staticmethod
     def supported_models() -> list[str]:
-        """Return list of models this provider supports (queries actual Ollama if possible)"""
-        try:
-            # Try to get actual installed models from Ollama
-            url = (
-                keyring.get_password("dazllm", "ollama_url") or "http://127.0.0.1:11434"
-            )
-            response = requests.get(f"{url}/api/tags", timeout=5)
-            response.raise_for_status()
-
-            models = response.json().get("models", [])
-            installed_models = [model["name"] for model in models]
-
-            if installed_models:
-                return installed_models
-        except Exception:
-            raise
+        """Return list of models this provider supports"""
+        url = keyring.get_password("dazllm", "ollama_url") or "http://127.0.0.1:11434"
+        response = requests.get(f"{url}/api/tags", timeout=5)
+        response.raise_for_status()
+        models = response.json().get("models", [])
+        return [model["name"] for model in models] if models else []
 
     @staticmethod
     def check_config():
@@ -73,7 +60,7 @@ class LlmOllama(Llm):
             response = requests.get(f"{base_url}/api/version", timeout=5)
             response.raise_for_status()
         except Exception as e:
-            raise ConfigurationError(f"Ollama not accessible: {e}")
+            raise ConfigurationError(f"Ollama not accessible: {e}") from e
 
     def _get_base_url(self) -> str:
         """Get Ollama base URL from keyring or default"""
@@ -82,25 +69,21 @@ class LlmOllama(Llm):
     @staticmethod
     def _get_base_url_static() -> str:
         """Static version of _get_base_url"""
-        url = keyring.get_password("dazllm", "ollama_url")
-        return url or "http://127.0.0.1:11434"
+        return keyring.get_password("dazllm", "ollama_url") or "http://127.0.0.1:11434"
 
     def _ensure_model_available(self):
         """Ensure model is available, pull if necessary"""
-        if not self._is_model_available():
-            if not self._pull_model():
-                raise ConfigurationError(
-                    f"Failed to pull model '{self.model}' from Ollama registry"
-                )
+        if not self._is_model_available() and not self._pull_model():
+            raise ConfigurationError(f"Failed to pull model '{self.model}' from Ollama registry")
 
     def _is_model_available(self) -> bool:
         """Check if model is available locally"""
         try:
-            response = requests.get(f"{self.base_url}/api/tags", headers=self.headers)
+            response = requests.get(f"{self.base_url}/api/tags", headers=self.headers, timeout=5)
             response.raise_for_status()
             models = response.json().get("models", [])
             return any(model["name"].startswith(self.model) for model in models)
-        except Exception:
+        except (requests.exceptions.RequestException, ValueError, KeyError):
             return False
 
     def _pull_model(self) -> bool:
@@ -110,43 +93,32 @@ class LlmOllama(Llm):
                 f"{self.base_url}/api/pull",
                 json={"model": self.model},
                 headers=self.headers,
-                timeout=300,  # 5 minute timeout for model pulling
+                timeout=300,
             )
             response.raise_for_status()
             return True
-        except Exception:
+        except (requests.exceptions.RequestException, ValueError):
             return False
 
     def _normalize_conversation(self, conversation: Conversation) -> list:
         """Convert conversation to Ollama message format"""
-        if isinstance(conversation, str):
-            return [{"role": "user", "content": conversation}]
-        return conversation
+        return [{"role": "user", "content": conversation}] if isinstance(conversation, str) else conversation
 
     def chat(self, conversation: Conversation, force_json: bool = False) -> str:
         """Chat using Ollama API"""
         messages = self._normalize_conversation(conversation)
-
-        data = {
-            "model": self.model,
-            "messages": messages,
-            "stream": False,
-        }
-
+        data = {"model": self.model, "messages": messages, "stream": False}
         if force_json:
             data["format"] = "json"
 
         try:
-            response = requests.post(
-                f"{self.base_url}/api/chat", json=data, headers=self.headers
-            )
+            response = requests.post(f"{self.base_url}/api/chat", json=data, headers=self.headers, timeout=60)
             response.raise_for_status()
-            result = response.json()
-            return result["message"]["content"]
+            return response.json()["message"]["content"]
         except requests.exceptions.RequestException as e:
-            raise DazLlmError(f"Ollama API error: {e}")
+            raise DazLlmError(f"Ollama API error: {e}") from e
         except KeyError as e:
-            raise DazLlmError(f"Unexpected Ollama response structure: {e}")
+            raise DazLlmError(f"Unexpected Ollama response structure: {e}") from e
 
     def chat_structured(
         self, conversation: Conversation, schema: Type[BaseModel], context_size: int = 0
@@ -155,7 +127,6 @@ class LlmOllama(Llm):
         messages = self._normalize_conversation(conversation)
         schema_json = schema.model_json_schema()
 
-        # Add system message with schema instructions
         system_message = {
             "role": "system",
             "content": (
@@ -166,64 +137,45 @@ class LlmOllama(Llm):
             ),
         }
 
-        conversation_with_system = [system_message] + messages
+        conv_with_system = [system_message] + messages
+        attempts = 20
 
-        attempt_count = 20
-        while attempt_count > 0:
+        while attempts > 0:
             data = {
                 "model": self.model,
-                "messages": conversation_with_system,
+                "messages": conv_with_system,
                 "stream": False,
                 "format": schema_json,
             }
-
             if context_size > 0:
                 data["options"] = {"num_ctx": context_size}
 
             try:
-                response = requests.post(
-                    f"{self.base_url}/api/chat", json=data, headers=self.headers
-                )
+                response = requests.post(f"{self.base_url}/api/chat", json=data, headers=self.headers, timeout=60)
                 response.raise_for_status()
-                result = response.json()
-                content = result["message"]["content"]
-
-                # Parse JSON
+                content = response.json()["message"]["content"]
                 parsed_content = self._find_json(content)
-
-                # Validate against schema
                 validate(instance=parsed_content, schema=schema_json)
-
-                # Create Pydantic model
                 return schema(**parsed_content)
 
             except requests.exceptions.RequestException as e:
-                raise DazLlmError(f"Ollama API error: {e}")
-            except json.JSONDecodeError as e:
-                conversation_with_system.append(
-                    {
-                        "role": "system",
-                        "content": "The previous response was not valid JSON. Please ensure the output is valid JSON strictly following the schema.",
-                    }
-                )
+                raise DazLlmError(f"Ollama API error: {e}") from e
+            except json.JSONDecodeError:
+                conv_with_system.append({
+                    "role": "system",
+                    "content": "The previous response was not valid JSON. Please ensure the output is valid JSON strictly following the schema.",
+                })
             except ValidationError as e:
-                conversation_with_system.append(
-                    {
-                        "role": "system",
-                        "content": (
-                            f"Your previous output did not adhere to the JSON schema because: {e}. "
-                            "Please generate a response that strictly follows the schema without any extra text or formatting."
-                        ),
-                    }
-                )
+                conv_with_system.append({
+                    "role": "system",
+                    "content": f"Your previous output did not adhere to the JSON schema because: {e}. Please generate a response that strictly follows the schema without any extra text or formatting.",
+                })
             except KeyError as e:
-                raise DazLlmError(f"Unexpected Ollama response structure: {e}")
+                raise DazLlmError(f"Unexpected Ollama response structure: {e}") from e
 
-            attempt_count -= 1
+            attempts -= 1
 
-        raise DazLlmError(
-            "Failed to get valid structured response after multiple attempts"
-        )
+        raise DazLlmError("Failed to get valid structured response after multiple attempts")
 
     def _find_json(self, text: str) -> dict:
         """Extract JSON from text response"""
@@ -235,10 +187,12 @@ class LlmOllama(Llm):
             json_text = text
         return json.loads(json_text)
 
-    def image(
-        self, prompt: str, file_name: str, width: int = 1024, height: int = 1024
-    ) -> str:
+    def image(self, prompt: str, file_name: str, width: int = 1024, height: int = 1024) -> str:
         """Generate image using Ollama (not supported by default)"""
-        raise DazLlmError(
-            "Image generation not supported by Ollama. Use OpenAI or other providers for image generation."
-        )
+        raise DazLlmError("Image generation not supported by Ollama. Use OpenAI or other providers for image generation.")
+
+
+import unittest
+class TestLlmOllama(unittest.TestCase):
+    def test_default_model(self):
+        self.assertEqual(LlmOllama.default_model(), "mistral-small")
