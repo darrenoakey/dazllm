@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dazllm"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Simple, unified interface for all major LLMs"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -56,3 +56,6 @@ Repository = "https://github.com/darrenoakey/dazllm.git"
 
 [project.scripts]
 dazllm = "dazllm.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "dazllm.__version__"}

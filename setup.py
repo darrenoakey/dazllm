@@ -1,29 +1,48 @@
 """
-Setup script for dazllm package
+Setup configuration for dazllm package.
+
+This setup script configures the package for distribution. The version number
+is read from dazllm/__init__.py to maintain a single source of truth.
 """
 
+import os
+import re
 from setuptools import setup, find_packages
 
 
+def get_version():
+    """Get version from dazllm/__init__.py"""
+    version_file = os.path.join(os.path.dirname(__file__), "dazllm", "__init__.py")
+    with open(version_file, "r", encoding="utf-8") as f:
+        version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", f.read(), re.M)
+        if version_match:
+            return version_match.group(1)
+    raise RuntimeError("Unable to find version string")
+
+
 def get_long_description():
-    """Read long description from README.md"""
-    with open("README.md", "r", encoding="utf-8") as fh:
-        return fh.read()
+    """Get long description from README.md"""
+    readme_path = os.path.join(os.path.dirname(__file__), "README.md")
+    if os.path.exists(readme_path):
+        with open(readme_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
 
 
 def get_requirements():
-    """Read requirements from requirements.txt"""
-    with open("requirements.txt", "r", encoding="utf-8") as fh:
-        return [
-            line.strip() for line in fh if line.strip() and not line.startswith("#")
-        ]
+    """Get requirements from requirements.txt"""
+    requirements_path = os.path.join(os.path.dirname(__file__), "requirements.txt")
+    if os.path.exists(requirements_path):
+        with open(requirements_path, "r", encoding="utf-8") as f:
+            return [line.strip() for line in f if line.strip() and not line.startswith("#")]
+    return []
 
 
 def run_setup():
     """Run the setup configuration"""
     setup(
         name="dazllm",
-        version="0.2.0",
+        version=get_version(),
         author="Darren Oakey",
         author_email="darren.oakey@insidemind.com.au",
         description="Simple, unified interface for all major LLMs",
@@ -80,7 +99,7 @@ class TestSetupConfiguration(unittest.TestCase):
 
     def test_version_format(self):
         """Test version follows semantic versioning"""
-        version = "0.1.0"
+        version = get_version()
         parts = version.split(".")
         self.assertEqual(len(parts), 3)
         for part in parts:
@@ -106,25 +125,11 @@ class TestSetupConfiguration(unittest.TestCase):
         self.assertIsInstance(python_requires, str)
         self.assertIn("3.8", python_requires)
 
-    def test_functions_exist(self):
-        """Test that setup functions exist"""
-        self.assertTrue(callable(get_long_description))
-        self.assertTrue(callable(get_requirements))
-        self.assertTrue(callable(run_setup))
-
-    def test_entry_points_format(self):
-        """Test entry points are correctly formatted"""
-        entry_point = "dazllm=dazllm.cli:main"
-        self.assertIn("=", entry_point)
-        parts = entry_point.split("=")
-        self.assertEqual(len(parts), 2)
-        self.assertEqual(parts[0], "dazllm")
-        self.assertEqual(parts[1], "dazllm.cli:main")
-
-    def test_keywords(self):
-        """Test keywords are relevant"""
-        keywords = "llm ai openai anthropic claude gemini ollama chatgpt gpt-4"
-        keyword_list = keywords.split()
-        self.assertIn("llm", keyword_list)
-        self.assertIn("ai", keyword_list)
-        self.assertTrue(len(keyword_list) > 5)
+    def test_version_can_be_read(self):
+        """Test that version can be read from __init__.py"""
+        version = get_version()
+        self.assertIsInstance(version, str)
+        self.assertGreater(len(version), 0)
+        # Test semantic versioning format
+        parts = version.split(".")
+        self.assertEqual(len(parts), 3)

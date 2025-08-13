@@ -42,8 +42,6 @@ class Llm:
     def model_named(cls, model_name: str) -> Llm:
         from .provider_manager import ProviderManager
 
-        print(f"Got model {model_name}")
-
         if model_name in cls._cached:
             return cls._cached[model_name]
         provider, model = cls._parse_model_name_static(model_name)

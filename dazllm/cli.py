@@ -143,16 +143,25 @@ def create_dynamic_model(schema_dict: dict) -> Type[BaseModel]:
 
 def get_version():
     """Get version from __init__.py in the same directory"""
-    import os
-    version_file = os.path.join(os.path.dirname(__file__), "__init__.py")
     try:
-        with open(version_file, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("__version__"):
-                    return line.split("=")[1].strip().strip('"').strip("'")
-    except FileNotFoundError:
-        pass
-    return "0.2.0"  # fallback version  # fallback version
+        # Try to import the version directly first
+        from . import __version__
+        return __version__
+    except ImportError:
+        # Fallback to reading the file directly
+        import os
+        import re
+        version_file = os.path.join(os.path.dirname(__file__), "__init__.py")
+        try:
+            with open(version_file, "r", encoding="utf-8") as f:
+                content = f.read()
+                version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", content, re.M)
+                if version_match:
+                    return version_match.group(1)
+        except FileNotFoundError:
+            pass
+    # Final fallback - should never be reached if __init__.py exists
+    return "unknown"  # fallback version  # fallback version
 
 
 def main():

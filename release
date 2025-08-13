@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PKG_DIR="dazllm"
+INIT_FILE="$PKG_DIR/__init__.py"
+REPO="pypi"   # change to "testpypi" to publish to TestPyPI
+
+# --- bump minor version (X.Y.Z -> X.(Y+1).0) ---
+python - <<'PY'
+from pathlib import Path
+
+p = Path("dazllm/__init__.py")
+lines = p.read_text(encoding="utf-8").splitlines()
+for i, line in enumerate(lines):
+    if line.strip().startswith("__version__"):
+        # extract version
+        old_version = line.split("=")[1].strip().strip('"').strip("'")
+        maj, minor, patch = map(int, old_version.split("."))
+        minor += 1
+        patch = 0
+        new_version = f"{maj}.{minor}.{patch}"
+        lines[i] = f'__version__ = "{new_version}"'
+        print(new_version)
+        break
+else:
+    raise SystemExit("ERROR: __version__ not found in __init__.py")
+
+p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+
+NEW_VER=$(grep "__version__" "$INIT_FILE" | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+echo "Version bumped to v$NEW_VER"
+
+# --- clean & prep ---
+rm -rf dist build *.egg-info
+python -m pip install -U build twine
+
+# --- build (ignore any pip.conf that forces --user) ---
+PIP_CONFIG_FILE=/dev/null python -m build
+
+# --- upload ---
+if [[ "$REPO" == "testpypi" ]]; then
+  twine upload --repository testpypi dist/*
+else
+  twine upload dist/*
+fi
+
+echo "Released v$NEW_VER to $REPO"

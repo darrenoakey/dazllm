@@ -64,7 +64,6 @@ class ProviderManager:
     @classmethod
     def create_provider_instance(cls, provider: str, model: str):
         """Create a provider instance for the given provider and model"""
-        print(f"create provider instance model {model}")
         provider_class = cls.get_provider_class(provider)
         return provider_class(f"{provider}:{model}")
 
