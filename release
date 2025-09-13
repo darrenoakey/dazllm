@@ -38,11 +38,27 @@ python -m pip install -U build twine
 # --- build (ignore any pip.conf that forces --user) ---
 PIP_CONFIG_FILE=/dev/null python -m build
 
-# --- upload ---
-if [[ "$REPO" == "testpypi" ]]; then
-  twine upload --repository testpypi dist/*
-else
-  twine upload dist/*
+# --- upload (non-interactive; token from keyring as 'pypi' 'api_token') ---
+
+# Pull the token from keyring
+raw_token="$(python - <<'PY'
+import keyring
+val = keyring.get_password("pypi", "api_token") or ""
+print(val, end="")  # no newline
+PY
+)"
+
+if [[ -z "$raw_token" ]]; then
+  echo "ERROR: No API token in keyring for service 'pypi' (user: api_token)" >&2
+  echo "Add it with:  python -m keyring set pypi api_token" >&2
+  exit 1
 fi
 
-echo "Released v$NEW_VER to $REPO"
+# Twine always needs username = __token__ for API tokens
+export TWINE_USERNAME="__token__"
+export TWINE_PASSWORD="$raw_token"
+echo $TWINE_PASSWORD
+
+twine upload dist/*
+
+

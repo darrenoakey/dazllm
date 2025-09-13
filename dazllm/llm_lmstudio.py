@@ -1,5 +1,7 @@
 # LM Studio provider for dazllm
 from __future__ import annotations
+import os
+
 
 # Comment: Keep imports top-level so configuration errors are immediate
 from typing import Optional, Union, List, Dict, Set, Any, cast
@@ -13,6 +15,11 @@ except Exception as _e:
 from pydantic import BaseModel
 
 from .core import Llm, Conversation, Message, ConfigurationError, DazLlmError
+
+
+# Comment: Central place to control desired context window (tokens)
+_DESIRED_CONTEXT_LENGTH = int(os.getenv("DAZ_LMSTUDIO_CONTEXT", "32768"))
+
 
 
 # Comment: Build a simple config dict for the SDK; we keep it minimal and deterministic
@@ -113,11 +120,45 @@ class LlmLmstudio(Llm):
     def __init__(self, model_name: str):
         super().__init__(model_name)
         if lms is None:
-            # Raise here too, so instance creation never hides a missing SDK
             raise ConfigurationError(
                 "The 'lmstudio' Python SDK is not importable. Install it and ensure LM Studio is running."
             )
-        self._model = lms.llm(self.model)  # may raise if the model isn't available
+
+        # Comment: If an instance is already loaded, LM Studio will ignore new load config.
+        # So we check what's loaded, verify context, and reload if needed.
+        try:
+            # Comment: Try to get an existing handle (loads on demand if nothing loaded)
+            existing = lms.llm(self.model)
+            current_ctx = existing.get_context_length()
+        except Exception:
+            existing = None
+            current_ctx = None
+
+        # Comment: If context matches, use it. Otherwise, unload and load a fresh instance with config.
+        if existing is not None and current_ctx == _DESIRED_CONTEXT_LENGTH:
+            self._model = existing
+        else:
+            try:
+                if existing is not None:
+                    existing.unload()
+            except Exception:
+                pass
+
+            # Comment: Load a new instance so that load-time config is applied
+            client = lms.get_default_client()
+            self._model = client.llm.load_new_instance(
+                self.model,
+                config={"contextLength": _DESIRED_CONTEXT_LENGTH},
+            )
+
+        # Optional sanity check; cheap and catches silent 4k zombies
+        loaded_ctx = self._model.get_context_length()
+        if loaded_ctx != _DESIRED_CONTEXT_LENGTH:
+            raise ConfigurationError(
+                f"LM Studio loaded with contextLength={loaded_ctx}, expected {_DESIRED_CONTEXT_LENGTH}. "
+                "Ensure the model supports this window and that no other instance is pinned in memory."
+            )
+
 
     # Comment: Plain chat interface; force_json is accepted for parity but not enforced here
     def chat(self, conversation: Conversation, force_json: bool = False) -> str:
@@ -151,6 +192,19 @@ class LlmLmstudio(Llm):
     # Comment: Images are not supported via the LM Studio text SDK path
     def image(self, prompt: str, file_name: str, width: int = 1024, height: int = 1024) -> str:
         raise DazLlmError("image generation is not supported by the LM Studio provider")
+    
+    # Comment: Get the context length for the currently loaded model
+    def get_context_length(self) -> int:
+        """Get the context length for the current LM Studio model"""
+        try:
+            # LM Studio SDK provides direct access to context length
+            if hasattr(self, '_model') and self._model:
+                return self._model.get_context_length()
+        except Exception:
+            pass
+        
+        # Fallback to the desired context length we configured
+        return _DESIRED_CONTEXT_LENGTH
 
 
 __all__ = ["LlmLmstudio"]

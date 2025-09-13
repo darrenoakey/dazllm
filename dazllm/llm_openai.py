@@ -191,6 +191,61 @@ class LlmOpenai(Llm):
 
         except Exception as e:
             raise DazLlmError(f"OpenAI image generation error: {e}") from e
+    
+    def get_context_length(self) -> int:
+        """Get the context length for the current OpenAI model"""
+        # Use OpenAI API to get model info
+        try:
+            import openai
+            api_key = keyring.get_password("dazllm", "openai_api_key")
+            if not api_key:
+                raise DazLlmError("OpenAI API key not found")
+            
+            client = openai.OpenAI(api_key=api_key)
+            
+            # Get model details from OpenAI API
+            model_info = client.models.retrieve(self.model)
+            
+            # Check if the model has context_length in the response
+            if hasattr(model_info, 'context_length'):
+                return model_info.context_length
+            
+            # Fallback to known context lengths for common models
+            context_lengths = {
+                "gpt-4o": 128000,
+                "gpt-4o-mini": 128000,
+                "gpt-4-turbo": 128000,
+                "gpt-4": 8192,
+                "gpt-3.5-turbo": 16385,
+                "gpt-3.5-turbo-16k": 16385,
+                "text-davinci-003": 4097,
+                "text-davinci-002": 4097,
+                "code-davinci-002": 8001,
+                "gpt-image-1": 4096,  # Image models have different context
+                "dall-e-2": 4096,
+                "dall-e-3": 4096,
+            }
+            
+            return context_lengths.get(self.model, 4096)  # Default fallback
+            
+        except Exception as e:
+            # If API call fails, use known defaults
+            context_lengths = {
+                "gpt-4o": 128000,
+                "gpt-4o-mini": 128000,
+                "gpt-4-turbo": 128000,
+                "gpt-4": 8192,
+                "gpt-3.5-turbo": 16385,
+                "gpt-3.5-turbo-16k": 16385,
+                "text-davinci-003": 4097,
+                "text-davinci-002": 4097,
+                "code-davinci-002": 8001,
+                "gpt-image-1": 4096,
+                "dall-e-2": 4096,
+                "dall-e-3": 4096,
+            }
+            
+            return context_lengths.get(self.model, 4096)
 
 
 class TestLlmOpenai(unittest.TestCase):

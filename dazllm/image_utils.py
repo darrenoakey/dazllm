@@ -18,10 +18,11 @@ class ImageUtils:
     @staticmethod
     def calculate_optimal_size(width: int, height: int) -> Tuple[int, int]:
         """Calculate optimal size within OpenAI constraints"""
+        # Current OpenAI supported sizes as of 2025
         openai_sizes = [
-            (1024, 1024), (1152, 896), (1216, 832), (1344, 768),
-            (1536, 640), (640, 1536), (768, 1344), (832, 1216),
-            (896, 1152)
+            (1024, 1024),  # Square
+            (1024, 1536),  # Portrait
+            (1536, 1024),  # Landscape
         ]
         
         target_ratio = width / height

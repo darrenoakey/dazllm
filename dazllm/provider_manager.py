@@ -24,6 +24,21 @@ PROVIDERS = {
         "module": ".llm_lmstudio",
         "aliases": ["lmstudio"],
     },
+    "codex-cli": {
+        "class": "LlmCodexCli", 
+        "module": ".llm_codex_cli", 
+        "aliases": ["codex"]
+    },
+    "claude-cli": {
+        "class": "LlmClaudeCli", 
+        "module": ".llm_claude_cli", 
+        "aliases": ["claudecli"]
+    },
+    "gemini-cli": {
+        "class": "LlmGeminiCli", 
+        "module": ".llm_gemini_cli", 
+        "aliases": ["geminicli"]
+    },
 }
 
 
@@ -126,6 +141,10 @@ class TestProviderManager(unittest.TestCase):
         self.assertEqual(ProviderManager.resolve_provider_alias("claude"), "anthropic")
         self.assertEqual(ProviderManager.resolve_provider_alias("gemini"), "google")
         self.assertEqual(ProviderManager.resolve_provider_alias("openai"), "openai")
+        # Test CLI provider aliases
+        self.assertEqual(ProviderManager.resolve_provider_alias("codex"), "codex-cli")
+        self.assertEqual(ProviderManager.resolve_provider_alias("claudecli"), "claude-cli")
+        self.assertEqual(ProviderManager.resolve_provider_alias("geminicli"), "gemini-cli")
 
     def test_exception_hierarchy(self):
         """Test exception inheritance"""

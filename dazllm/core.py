@@ -259,6 +259,11 @@ class Llm:
     ) -> str:
         raise NotImplementedError("image should be implemented by subclasses")
 
+    # Get context length for the current model (subclasses must implement)
+    def get_context_length(self) -> int:
+        """Get the context length (token limit) for the current model"""
+        raise NotImplementedError("get_context_length should be implemented by subclasses")
+
     # Describe provider capabilities (subclasses must implement)
     @staticmethod
     def capabilities() -> Set[str]:
@@ -335,6 +340,64 @@ class Llm:
         model_name = ModelResolver.resolve_model(model, model_type)
         llm = cls.model_named(model_name)
         return llm.image(prompt, file_name, width, height)
+
+    # Generate image using the best available provider
+    @classmethod
+    def generate_image(
+        cls,
+        prompt: str,
+        file_name: str,
+        width: int = 1024,
+        height: int = 1024,
+        preferred_provider: Optional[str] = None,
+    ) -> str:
+        """Generate an image using the best available provider that supports image generation
+        
+        Args:
+            prompt: The image generation prompt
+            file_name: Output file name
+            width: Image width in pixels
+            height: Image height in pixels  
+            preferred_provider: Optional preferred provider name
+            
+        Returns:
+            Path to the generated image file
+        """
+        from .provider_manager import ProviderManager
+        
+        # Define provider preference order (best to worst)
+        provider_preference = [
+            "openai",      # Best quality with gpt-image-1
+            "google",      # Good alternative with Gemini
+            "anthropic",   # If they add image support
+        ]
+        
+        # If user specified a preferred provider, try it first
+        if preferred_provider:
+            try:
+                provider = ProviderManager.resolve_provider_alias(preferred_provider)
+                info = ProviderManager.get_provider_info(provider)
+                if "image" in info.get("capabilities", set()):
+                    llm = cls.from_provider(provider)
+                    return llm.image(prompt, file_name, width, height)
+            except Exception:
+                pass  # Fall back to automatic selection
+        
+        # Try providers in preference order
+        for provider in provider_preference:
+            try:
+                info = ProviderManager.get_provider_info(provider)
+                if info.get("configured", False) and "image" in info.get("capabilities", set()):
+                    # For OpenAI, use gpt-image-1 specifically
+                    if provider == "openai":
+                        llm = cls.model_named("openai:gpt-image-1")
+                    else:
+                        llm = cls.from_provider(provider)
+                    return llm.image(prompt, file_name, width, height)
+            except Exception:
+                continue  # Try next provider
+        
+        raise DazLlmError("No configured provider supports image generation")
 
 
 # Check configuration status across providers

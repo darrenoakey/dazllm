@@ -17,7 +17,7 @@ from .core import (
     check_configuration,
 )
 
-__version__ = "0.8.0"
+__version__ = "0.26.0"
 __all__ = [
     "Llm",
     "ModelType",

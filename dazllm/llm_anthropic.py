@@ -163,6 +163,23 @@ class LlmAnthropic(Llm):
         raise DazLlmError(
             "Image generation not supported by Anthropic. Use OpenAI or other providers for image generation."
         )
+    
+    def get_context_length(self) -> int:
+        """Get the context length for the current Claude model"""
+        # Known context lengths for Claude models
+        context_lengths = {
+            "claude-3-5-sonnet-20241022": 200000,    # 200K tokens
+            "claude-3-5-sonnet-20240620": 200000,    # 200K tokens
+            "claude-3-5-haiku-20241022": 200000,     # 200K tokens
+            "claude-3-opus-20240229": 200000,        # 200K tokens
+            "claude-3-sonnet-20240229": 200000,      # 200K tokens
+            "claude-3-haiku-20240307": 200000,       # 200K tokens
+            "claude-2.1": 200000,                    # 200K tokens
+            "claude-2.0": 100000,                    # 100K tokens
+            "claude-instant-1.2": 100000,            # 100K tokens
+        }
+        
+        return context_lengths.get(self.model, 200000)  # Default to 200K
 
 
 import unittest
