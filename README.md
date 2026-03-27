@@ -217,8 +217,7 @@ print(f"Image saved to {image_path}")
 
 ## License
 
-MIT License
-
+This project is licensed under [CC BY-NC 4.0](https://darren-static.waft.dev/license) - free to use and modify, but no commercial use without permission.
 ## Contributing
 
 Contributions welcome! Please see the GitHub repository for guidelines.
